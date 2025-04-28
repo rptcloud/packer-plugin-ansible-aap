@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/go-resty/resty/v2"
+	resty "github.com/go-resty/resty/v2"
 )
 
 type AAPClient struct {
@@ -132,30 +132,48 @@ func (c *AAPClient) DeleteInventory(ctx context.Context, invID int) error {
 	return nil
 }
 
-func (c *AAPClient) LaunchJob(ctx context.Context, invID, jobTemplateID, workflowTemplateID int, extraVars map[string]interface{}) (int, error) {
-	launch := map[string]interface{}{
-		"inventory":  invID,
-		"extra_vars": extraVars,
-	}
-	var endpoint string
-	if workflowTemplateID != 0 {
-		launch["workflow_template"] = workflowTemplateID
-		endpoint = fmt.Sprintf("/api/v2/workflow_job_templates/%d/launch/", workflowTemplateID)
-	} else {
-		launch["job_template"] = jobTemplateID
-		endpoint = fmt.Sprintf("/api/v2/job_templates/%d/launch/", jobTemplateID)
-	}
-	resp, err := c.client.R().SetContext(ctx).SetBody(launch).Post(endpoint)
-		return 0, fmt.Errorf("failed to launch job: %s", err)
-	}
-	if resp.IsError() {
-		return 0, fmt.Errorf("failed to launch job: %s (status: %d)", resp.String(), resp.StatusCode())
-	}
-	var result struct{ Job int `json:"job"` }
-	if err := json.Unmarshal(resp.Body(), &result); err != nil {
-		return 0, fmt.Errorf("failed to parse job launch response: %s", err)
-	}
-	return result.Job, nil
+func (c *AAPClient) LaunchJob(
+    ctx context.Context,
+    invID, jobTemplateID, workflowTemplateID int,
+    extraVars map[string]interface{},
+) (int, error) {
+    launch := map[string]interface{}{
+        "inventory":  invID,
+        "extra_vars": extraVars,
+    }
+
+    // pick the right endpoint
+    var endpoint string
+    if workflowTemplateID != 0 {
+        launch["workflow_template"] = workflowTemplateID
+        endpoint = fmt.Sprintf("/api/v2/workflow_job_templates/%d/launch/", workflowTemplateID)
+    } else {
+        launch["job_template"] = jobTemplateID
+        endpoint = fmt.Sprintf("/api/v2/job_templates/%d/launch/", jobTemplateID)
+    }
+
+    // send the request
+    resp, err := c.client.R().
+        SetContext(ctx).
+        SetBody(launch).
+        Post(endpoint)
+    if err != nil {
+        return 0, fmt.Errorf("failed to launch job: %s", err)
+    }
+    if resp.IsError() {
+        return 0, fmt.Errorf(
+            "failed to launch job: %s (status: %d)",
+            resp.String(),
+            resp.StatusCode(),
+        )
+    }
+
+    // parse the job ID
+    var result struct{ Job int `json:"job"` }
+    if err := json.Unmarshal(resp.Body(), &result); err != nil {
+        return 0, fmt.Errorf("failed to parse job launch response: %s", err)
+    }
+    return result.Job, nil
 }
 
 func (c *AAPClient) PollJob(ctx context.Context, jobID int, timeout, pollInterval time.Duration) error {
