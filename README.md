@@ -1,89 +1,83 @@
 # Packer Provisioner Plugin for Ansible Automation Platform (AAP)
 
-This Packer provisioner plugin integrates with Ansible Automation Platform (AAP) to dynamically create inventories and hosts, launch job templates, and manage the provisioning process during Packer builds.
+This Packer provisioner plugin integrates with Ansible Automation Platform (AAP) to dynamically create inventories, hosts, and credentials, launch job templates, and manage the provisioning process during Packer builds.
 
 ## Features
-- Dynamically creates AAP inventories and hosts based on Packer's SSH communicator.
-- Launches AAP job templates with custom extra variables.
-- Polls job status until completion.
-- Optional cleanup of temporary inventories and hosts.
-- Configurable timeout and polling interval.
+- **Dynamic Resource Management**: Automatically creates temporary inventories, hosts, and SSH credentials
+- **Flexible Authentication**: Support for both username/password and access token authentication
+- **Automatic Cleanup**: Removes temporary resources in dependency-safe order
+- **Job Monitoring**: Polls job status with configurable intervals and timeouts
+- **Stdout Retrieval**: Fetches and displays job output for debugging
+- **Extra Variables**: Pass custom variables to job templates
+- **Resource Retention**: Option to keep temporary inventories for debugging
 
-## Installation
+## Local Development Installation
 
 1. **Build the plugin**:
    ```bash
-   go build -o packer-provisioner-ansible-aap
+   packer-sdc mapstructure-to-hcl2 -type Config pkgs/config/config.go
+   goreleaser release --clean --skip=validate,publish
    ```
 
 2. **Install the plugin**:
-   Move the binary to Packer's plugin directory:
+   Install from the dist of the goreleaser for your given arch. For darwin arm64, the command would be:
    ```bash
-   mkdir -p ~/.packer.d/plugins
-   mv packer-provisioner-ansible-aap ~/.packer.d/plugins/
+   packer plugins install --path $PWD/dist/packer-provisioner-ansible-aap_darwin_arm64_v8.0/packer-plugin-ansible-aap github.com/rptcloud/ansible-aap  
    ```
 
 ## Usage
-
-Add the provisioner to your Packer template:
-
-```hcl
-source "amazon-ebs" "example" {
-  ami_name      = "ansible-aap-test-{{timestamp}}"
-  instance_type = "t2.micro"
-  region        = "us-east-1"
-  ssh_username  = "ubuntu"
-  source_ami    = "ami-12345678"
-}
-
-build {
-  sources = ["source.amazon-ebs.example"]
-
-  provisioner "ansible-aap" {
-    tower_host          = "https://aap.example.com"
-    username            = "admin"
-    password            = "secret"
-    job_template_id     = 42
-    organization_id     = 1
-    dynamic_inventory   = true
-    keep_temp_inventory = false
-    extra_vars = {
-      key1 = "value1"
-      key2 = "value2"
-    }
-    timeout       = "15m"
-    poll_interval = "10s"
-  }
-}
-```
+See [Examples Directory](./examples/).
 
 ## Configuration Options
-- `tower_host`: AAP API endpoint (e.g., `https://aap.example.com`).
-- `username`: AAP API username.
-- `password`: AAP API password.
-- `job_template_id`: ID of the job template to run.
-- `inventory_id`: ID of an existing inventory (if `dynamic_inventory` is false).
-- `organization_id`: ID of the organization for dynamic inventories.
-- `dynamic_inventory`: Whether to create a temporary inventory (default: false).
-- `keep_temp_inventory`: Whether to keep temporary inventories after the build (default: false).
-- `extra_vars`: Extra variables to pass to the job template.
-- `timeout`: Maximum time to wait for job completion (default: 30m).
-- `poll_interval`: Interval for polling job status (default: 5s).
+
+### Required Configuration
+- `tower_host`: AAP API endpoint (e.g., `https://aap.example.com`)
+- `organization_id`: ID of the organization for dynamic inventories (required when `dynamic_inventory` is true)
+
+### Job Template Configuration (Choose One)
+- `job_template_id`: ID of the job template to run
+- `workflow_template_id`: ID of the workflow template to run
+
+### Authentication (Choose One)
+- `username` + `password`: Basic authentication
+- `access_token`: Bearer token authentication (preferred)
+
+### Inventory Settings
+- `inventory_id`: Use an existing inventory instead of creating a new one
+- `dynamic_inventory`: Whether to create a temporary inventory (default: true)
+- `keep_temp_inventory`: Whether to keep temporary inventories after the build (default: false)
+
+### Credential Management
+- `create_credential`: Whether to create temporary credentials (default: true)
+- `keep_temp_credential`: Whether to keep temporary credentials after the build (default: false)
+
+### Job Configuration
+- `extra_vars`: Map of extra variables to pass to the job template
+- `timeout`: Maximum time to wait for job completion (default: "15m")
+- `poll_interval`: Interval for polling job status (default: "10s")
+
+### Security Configuration
+- `insecure_skip_verify`: Skip SSL certificate verification (default: false)
+
+## Workflow
+
+The provisioner follows this workflow:
+
+1. **Create Inventory**: Creates a temporary inventory in the specified organization
+2. **Add Host**: Adds the target host to the inventory with proper Ansible variables
+3. **Create Credential**: Creates an SSH credential using the specified private key
+4. **Launch Job**: Launches the job template with the inventory and credential
+5. **Poll Status**: Monitors job status until completion or failure
+6. **Fetch Output**: Retrieves and displays job stdout
+7. **Cleanup**: Removes temporary resources (inventory, host, credential)
 
 ## Requirements
-- Packer with SSH communicator enabled.
-- AAP with API access and a valid job template.
-- Environment variables set by Packer: `PACKER_SSH_HOST`, `PACKER_SSH_PORT`, `PACKER_SSH_USERNAME`, and either `PACKER_SSH_KEY_FILE` or `PACKER_SSH_PASSWORD`.
-
-## Development
-To contribute or modify the plugin:
-1. Clone the repository.
-2. Make changes to `provisioner.go`, `config.go`, or `client.go`.
-3. Build and test:
-   ```bash
-   go test ./...
-   go build -o packer-provisioner-ansible-aap
-   ```
+- Packer with SSH communicator enabled
+- AAP with API access and a valid job template
+- SSH private key file for target host authentication
 
 ## License
 MIT
+
+## Kudos
+- [@David Joo](https://github.com/glimpsovstar) for the original work.

@@ -1,0 +1,33 @@
+version: "2"
+issues:
+  max-issues-per-linter: 0     # Show all issues per linter (set 0 to disable limit)[6][4]
+  max-same-issues: 0           # Show all issues with the same text (set 0 to disable limit)[6][4]
+
+linters:
+  default: none
+  enable:
+    - durationcheck
+    - errcheck
+    - forcetypeassert
+    - godot
+    - ineffassign
+    - makezero
+    - misspell
+    - nilerr
+    - predeclared
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+    - govet
+    - usetesting
+  settings:
+    usetesting:
+      os-temp-dir: true
+      os-chdir: true
+      context-background: true
+      context-todo: true
+formatters:
+  enable:
+    - goimports
+    - gofmt
